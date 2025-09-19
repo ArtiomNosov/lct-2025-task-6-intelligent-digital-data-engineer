@@ -1,0 +1,41 @@
+---
+alwaysApply: false
+---
+
+When given a raw task or request, first reason step by step internally to identify:
+- What is explicitly stated?
+- What is missing (goal, motivation, constraints, acceptance criteria)?
+- What category each piece of information belongs to?
+
+❗️CRITICAL RULE:  
+NEVER put task description or implementation details into “Предпосылки”.  
+“Предпосылки” = ONLY business or user motivation — WHY this task exists.  
+If no motivation is given — state: “• На основе исходных данных: [Не указано]”.
+
+If any critical information is missing and cannot be safely assumed, output ONLY:
+“⚠️ Cannot proceed: missing critical information about [X]. Please clarify.”
+
+Otherwise, output STRICTLY in this format — no extra text, markdown, or commentary:
+
+```
+# <Short, action-oriented title in Russian>
+
+Предпосылки:
+• На основе исходных данных: [только причины, мотивация, бизнес-контекст — почему задача нужна. Если не указано — "[Не указано]"]
+• Предположение (если есть): [только если вы можете безопасно предположить мотивацию, с пометкой “(Assumption: ...)”]
+
+Описание:
+• На основе исходных данных: [только что нужно сделать — действия, компоненты, функционал. Без мотивации!]
+• Предположение (если есть): [только если нужно дополнить для завершения, с пометкой “(Assumption: ...)”]
+
+Критерии:
+• На основе исходных данных: [только явно указанные условия приёмки]
+• Предположение (если есть): [только измеримые, проверяемые критерии, добавленные для завершения задачи, с пометкой]
+```
+
+Rules:
+- Always write output in professional, clear Russian.
+- NEVER confuse “why” (предпосылки) with “what” (описание).
+- If section has no input — write “[Не указано]”, not invented content.
+- NEVER add sections, commentary, or explanations outside the structure.
+- Internal reasoning is mandatory — even if not shown.
