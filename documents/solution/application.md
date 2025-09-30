@@ -21,24 +21,36 @@
 - Google Cloud Data Fusion (Commercial)
 
 ### Сравнение по ключевым критериям (14)
-| Критерий | ИЦИД (ваш MVP) | Apache Airflow | Prefect | Dagster | Kedro | Flyte | dbt | Meltano | Airbyte | AWS Glue | Azure Data Factory | GCP Data Fusion |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1) Лицензия/модель | OSS‑подход, локально | OSS | OSS+Cloud | OSS+Cloud | OSS | OSS+Cloud | OSS+Cloud | OSS | OSS+Cloud | Commercial | Commercial | Commercial |
-| 2) Основной UI | IDE Cursor (чат/терминал) | Web | Web+CLI | Web | CLI | Web/CLI | Web (Cloud)/CLI | CLI | Web | Web | Web | Web |
-| 3) Оркестрация DAG | Cron в контейнере | Сильная | Сильная | Сильная | Через внешние | Сильная | Нет | Через внешние | Базовая для sync | Managed | Managed | Managed |
-| 4) EL/ELT коннекторы | Нет (локальные файлы) | Плагины/операторы | Blocks/flows | IO‑менеджеры | Нет | Плагины | Через адаптеры DWH | Singer (taps/targets) | Большая библиотека | Glue connectors | Linked services | Prebuilt connectors |
-| 5) Трансформации | Python/pandas/pyarrow | Операторы (внешние движки) | Tasks | Ops/SDAs | Python nodes | Tasks | SQL‑трансформации | ELT‑оркестрация | Ограниченные | Spark/ETL | Data Flows | Wrangler/Plugins |
-| 6) Потоки/стриминг | Нет | Ограниченно | Есть | Есть частично | Нет | Есть | Нет | Нет | Ограниченно | Да | Да | Да |
-| 7) Расписание | Cron (.env) | Scheduler | Scheduler | Scheduler | Внешний | Scheduler | Внешний | Внешний | Scheduler | Managed | Managed | Managed |
-| 8) Наблюдаемость/логи | Markdown‑отчёты, логи контейнера | UI/метрики/алерты | UI/Cloud | UI/asset obs. | Внешние | UI/метрики | Tests/docs | Внешние | UI/мониторинг | CloudWatch/Glue | Azure Monitor | Cloud Monitoring |
-| 9) Масштабируемость | Контейнер локально | Высокая (k8s/celery) | Высокая | Высокая | От среды | Высокая | От DWH | От оркестратора | Высокая (Cloud) | Высокая | Высокая | Высокая |
-| 10) Безопасность/секреты | .env локально | Secrets backends | Secrets/Blocks | Secrets | От среды | Secrets/SA | Secrets в CI/Cloud | От среды | Secrets (Cloud) | IAM/KMS | Managed identities | IAM/KMS |
-| 11) Развёртывание | Docker Compose 1 svc | Docker/k8s | OSS/Cloud | OSS/Cloud | Any env | k8s/Cloud | Local/Cloud | Local | Local/Cloud | Managed AWS | Managed Azure | Managed GCP |
-| 12) Стоимость | Бесплатно | Бесплатно | OSS/подписка | OSS/подписка | Бесплатно | OSS/подписка | OSS/подписка | Бесплатно | OSS/подписка | Платно | Платно | Платно |
-| 13) Сообщество | Молодое | Крупное | Крупное | Растущее | Зрелое | Растущее | Крупное | Активное | Крупное | Enterprise | Enterprise | Enterprise |
-| 14) Фокус/позиционирование | IDE‑first, правила, ASCII/отчёты | Оркестрация | Оркестрация+DevX | Оркестрация+SDAs | Каркас проекта | k8s‑native оркестрация | SQL‑трансформации | ELT‑каркас | Интеграции ELT | Managed ETL | Managed ETL | Managed iPaaS ETL |
 
-Примечания к трактовке: «Оркестрация» — граф зависимостей, ретраи, расписание; «EL/ELT» — перенос данных готовыми коннекторами; «Трансформации» — встроенные механики или через SQL/код; «Потоки» — event/stream, не только batch.
+Обозначения (легенда):
+- UI: W = Web, C = Cursor, L = CLI, A = API
+- Оркестрация: +++ = сильная, + = базовая, − = нет/внешняя
+- Коннекторы EL/ELT: +++ = широкие, + = есть, − = нет
+- Трансформации: SQL = в DWH/SQL, Py = в Python/движки, Ext = внешние движки
+- Потоки: ✓ = да, ~ = ограниченно, − = нет
+- Расписание: Sch = встроенный, Cron = cron, Ext = внешний, Mg = managed
+- Масштабируемость: ↑↑↑ = высокая, ↑ = средняя, env = зависит от среды
+- Безопасность: Sec = секреты/хранилища секретов (уровень платформы)
+- Развёртывание: Loc = локально, K8s = k8s, Mg = managed cloud
+- Стоимость: $ = платно, 0 = бесплатно, 0/$ = есть OSS и платная
+
+| Критерий | ИЦИД | Airflow | Prefect | Dagster | Kedro | Flyte | dbt | Meltano | Airbyte | AWS Glue | ADF | Data Fusion |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Модель | OSS | OSS | 0/$ | 0/$ | OSS | 0/$ | 0/$ | OSS | 0/$ | $ | $ | $ |
+| UI | C | W | W/L | W | L | W/L | W/L | L | W | W | W | W |
+| Оркестрация | + (Cron) | +++ | +++ | +++ | − (Ext) | +++ | − | − (Ext) | + | Mg | Mg | Mg |
+| Коннекторы | − (files) | + | + | + | − | + | Ext | +++ (Singer) | +++ | +++ | +++ | +++ |
+| Трансформации | Py | Ext | Py | Py | Py | Py | SQL | Ext | ~ | Spark | Flows | Plugins |
+| Потоки | − | ~ | ✓ | ~ | − | ✓ | − | − | ~ | ✓ | ✓ | ✓ |
+| Расписание | Cron | Sch | Sch | Sch | Ext | Sch | Ext | Ext | Sch | Mg | Mg | Mg |
+| Наблюдаемость | отчёты.md | UI | UI | UI/assets | Ext | UI | tests/docs | Ext | UI | Cloud | Cloud | Cloud |
+| Масштабируемость | Loc | ↑↑↑ | ↑↑↑ | ↑↑↑ | env | ↑↑↑ | env (DWH) | env | ↑↑↑ | ↑↑↑ | ↑↑↑ | ↑↑↑ |
+| Безопасность | .env | Sec | Sec | Sec | env | Sec | Sec | env | Sec | IAM/KMS | Managed IDs | IAM/KMS |
+| Развёртывание | Loc | Loc/K8s | Loc/Cloud | Loc/Cloud | Any | K8s/Cloud | Loc/Cloud | Loc | Loc/Cloud | Mg AWS | Mg Azure | Mg GCP |
+| Стоимость | 0 | 0 | 0/$ | 0/$ | 0 | 0/$ | 0/$ | 0 | 0/$ | $ | $ | $ |
+| Фокус | IDE‑first | Orchestration | Orchestration/DevX | Orchestr./SDAs | Project FW | k8s‑native | SQL xform | ELT FW | Connectors | Managed ETL | Managed ETL | Managed iPaaS |
+
+Примечание: «Orchestr./SDAs» — software‑defined assets; «FW» — фреймворк; «Ext» — за рамками инструмента; «Cloud» — управляемые сервисы облака.
 
 ### Краткие описания архитектуры и принципов
 - ИЦИД: IDE‑first. Правила в `.cursor/rules/` управляют ассистентом: анализ данных, генерация пайплайна, поддержка ASCII‑диаграммы, отчёт `.md`. Исполнитель — Python‑утилиты в Docker, планирование — cron в контейнере. Демо: локальные файлы/SQLite.
