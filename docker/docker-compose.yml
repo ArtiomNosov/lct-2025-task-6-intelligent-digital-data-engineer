@@ -12,15 +12,25 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  airflow:
+  airflow-webserver:
     image: apache/airflow:2.10.2
+    command: webserver
     environment:
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres/etl_db
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres/etl_db
     depends_on:
       - postgres
     ports:
       - "8081:8080"
+
+  airflow-scheduler:
+    image: apache/airflow:2.10.2
+    command: scheduler
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:admin@postgres/etl_db
+    depends_on:
+      - postgres
 
 volumes:
   postgres_data:
