@@ -109,12 +109,12 @@ with DAG(
 - Для создания администратора вручную:
 
 ```bash
-docker compose run --rm airflow-webserver \
-    airflow users create \
-    --username admin \
-    --password admin \
-    --firstname Admin \
-    --lastname User \
-    --role Admin \
+docker compose run --rm airflow-webserver 
+    airflow users create 
+    --username admin 
+    --password admin 
+    --firstname Admin 
+    --lastname User 
+    --role Admin 
     --email admin@example.com
 ```
