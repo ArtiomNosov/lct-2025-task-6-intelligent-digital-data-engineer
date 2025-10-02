@@ -61,6 +61,37 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
 
+  spark-master:
+    image: apache/spark:3.5.1-scala2.12-java11-python3-ubuntu
+    container_name: spark-master
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+      --host 0.0.0.0
+      --port 7077
+      --webui-port 8080
+    ports:
+      - "8082:8080"
+      - "7077:7077"
+    volumes:
+      - spark_data:/opt/spark/work-dir
+
+  
+  spark-worker:
+    image: apache/spark:3.5.1-scala2.12-java11-python3-ubuntu
+    container_name: spark-worker
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+      --webui-port 8081
+      --port 7078
+      spark://spark-master:7077
+    depends_on:
+      - spark-master
+    ports:
+      - "8083:8081"
+    volumes:
+      - spark_data:/opt/spark/work-dir
+
 volumes:
   postgres_data:
   kafka_data:
+  spark_data:
