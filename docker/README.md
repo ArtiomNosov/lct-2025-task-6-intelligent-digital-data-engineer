@@ -54,7 +54,13 @@ docker compose logs airflow-scheduler --tail=100
 docker compose logs kafka --tail=100
 
 # Zookeeper
-docker compose logs zookeeper --tail=100 
+docker compose logs zookeeper --tail=100
+
+# Spark Master
+docker compose logs spark-master --tail=100
+
+# Spark Worker
+docker compose logs spark-worker --tail=100
 ```
 
 - Подключиться к PostgreSQL:
@@ -68,17 +74,46 @@ docker compose exec postgres psql -U admin
 docker exec -it kafka bash
 ```
 
+- Подключиться к Spark Master:
+```bash
+docker exec -it spark-master bash
+```
 ---
 
-## 🧪 Тестирование Kafka
+## 🧪 Тестирование компонентов
 
-### Создание топика
+### Apache spark
+```bash
+# Зайти в контейнер Spark Master
+docker exec -it spark-master bash
+
+# Запустить PySpark
+/opt/spark/bin/pyspark --master spark://spark-master:7077
+
+# Простой тест
+sc.parallelize([1, 2, 3, 4, 5]).collect()
+
+# Выход
+exit()
+```
+
+### Spark задачи через submit
+```bash
+# Запуск примера SparkPi
+docker exec spark-master /opt/spark/bin/spark-submit \
+    --master spark://spark-master:7077 \
+    --class org.apache.spark.examples.SparkPi \
+    /opt/spark/examples/jars/spark-examples_2.12-3.5.1.jar 10
+```
+
+### Apache Kafka
 ```bash
 docker exec -it kafka bash
+
+#Создание топика
 kafka-topics --create --topic test-topic --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1
 ```
 
-### Отправка и получение сообщений
 ```bash
 # Терминал 1: Консюмер
 kafka-console-consumer --topic test-topic --bootstrap-server kafka:9092 --from-beginning
@@ -131,10 +166,24 @@ docker compose ps
 ```
 Zookeeper должен запуститься раньше Kafka.
 
-### 5. Ошибка "manifest not found" для образов
+### 5. Spark Master не видит Worker'ы
+Проверить логи:
+```bash
+docker logs spark-master --tail 50
+docker logs spark-worker --tail 50
+```
+
+### 6. Ошибка "manifest not found" для образов
 Используются зафиксированные версии Confluent:
 - `confluentinc/cp-zookeeper:7.6.1`
 - `confluentinc/cp-kafka:7.6.1`
+- `apache/spark:3.5.1-scala2.12-java11-python3-ubuntu`
+
+### 7. Spark задачи не выполняются
+Проверить доступность Master:
+```bash
+curl http://localhost:8082
+```
 
 ---
 
@@ -159,9 +208,39 @@ Zookeeper должен запуститься раньше Kafka.
   - Host: localhost
   - Port: 2181
 
+- **Apache Spark**
+  - **Spark Master UI**: http://localhost:8082
+  - **Spark Worker UI**: http://localhost:8083
+  - **Master URL**: spark://localhost:7077
+  - **Application UI**: http://localhost:4040 (во время выполнения задач)
+
 ---
 
 ## 🗂️ Структура volumes
 
 - `postgres_data` — данные PostgreSQL
 - `kafka_data` — данные Kafka (топики, оффсеты)
+- `spark_data` — рабочие файлы Spark
+
+---
+
+## ⚡ Быстрые команды
+
+```bash
+# Полный перезапуск стека
+docker compose down && docker compose up -d
+
+# Проверка всех сервисов
+docker compose ps && docker compose logs --tail=10
+
+# Очистка данных и перезапуск
+docker compose down -v && docker compose up -d
+
+# Мониторинг ресурсов
+docker stats
+
+# Подключение ко всем основным сервисам
+docker exec -it postgres psql -U admin
+docker exec -it kafka bash
+docker exec -it spark-master bash
+```
