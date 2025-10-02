@@ -16,7 +16,17 @@ cd docker
 docker compose up -d
 ```
 
-### 3. Остановить сервисы
+### 3. Инициализация Airflow (первый запуск)
+```bash
+docker compose run --rm airflow-webserver bash -c "airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com"
+```
+
+### 4. Перезапуск после инициализации
+```bash
+docker compose up -d
+```
+
+### 5. Остановить сервисы
 ```bash
 docker compose down
 ```
@@ -31,16 +41,56 @@ docker compose down
 docker compose ps 
 ```
 
-- Логи сервиса (например, Airflow):
+- Логи сервисов:
 
 ```bash
-docker compose logs airflow-webserver --tail=100 
+# Airflow webserver
+docker compose logs airflow-webserver --tail=100
+
+# Airflow scheduler
+docker compose logs airflow-scheduler --tail=100
+
+# Kafka
+docker compose logs kafka --tail=100
+
+# Zookeeper
+docker compose logs zookeeper --tail=100 
 ```
 
 - Подключиться к PostgreSQL:
 
 ```bash
 docker compose exec postgres psql -U admin
+```
+
+- Подключиться к Kafka:
+```bash
+docker exec -it kafka bash
+```
+
+---
+
+## 🧪 Тестирование Kafka
+
+### Создание топика
+```bash
+docker exec -it kafka bash
+kafka-topics --create --topic test-topic --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1
+```
+
+### Отправка и получение сообщений
+```bash
+# Терминал 1: Консюмер
+kafka-console-consumer --topic test-topic --bootstrap-server kafka:9092 --from-beginning
+
+# Терминал 2: Продюсер  
+kafka-console-producer --topic test-topic --bootstrap-server kafka:9092
+```
+
+### Проверка топиков
+```bash
+kafka-topics --list --bootstrap-server kafka:9092
+kafka-topics --describe --topic test-topic --bootstrap-server kafka:9092
 ```
 
 ---
@@ -74,21 +124,44 @@ docker compose run --rm airflow-webserver
 volumes: - ../dags:/opt/airflow/dags
 ```
 
+### 4. Kafka не может подключиться к Zookeeper
+Проверить порядок запуска сервисов:
+```bash
+docker compose ps
+```
+Zookeeper должен запуститься раньше Kafka.
+
+### 5. Ошибка "manifest not found" для образов
+Используются зафиксированные версии Confluent:
+- `confluentinc/cp-zookeeper:7.6.1`
+- `confluentinc/cp-kafka:7.6.1`
+
 ---
 
 ## 📌 Сервисы по умолчанию
 
 - **Airflow UI** → http://localhost:8081
-Логин: admin, Пароль: admin
+  - Логин: admin, Пароль: admin
 
 - **PostgreSQL**
-
     - Host: localhost
-
     - Port: 5432
-
     - User: admin
-
     - Password: admin
-
     - DB: etl_db
+
+- **Apache Kafka**
+  - Host: localhost
+  - Port: 9092
+  - Bootstrap servers: localhost:9092
+
+- **Apache Zookeeper**
+  - Host: localhost
+  - Port: 2181
+
+---
+
+## 🗂️ Структура volumes
+
+- `postgres_data` — данные PostgreSQL
+- `kafka_data` — данные Kafka (топики, оффсеты)

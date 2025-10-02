@@ -17,13 +17,16 @@
 - Развернуть инфраструктуру на Docker.
 - Поднять **Airflow** для оркестрации ETL-процессов.
 - Настроить **PostgreSQL** для хранения данных.
+- Интегрировать **Apache Kafka** для потоковой обработки данных.
 - Создать и протестировать DAG’и (рабочие процессы).
 
 ---
 
 ## 🛠 Используемые технологии
 - 🐘 **PostgreSQL** — хранилище данных  
-- 🌬 **Apache Airflow** — оркестрация ETL процессов  
+- 🌬 **Apache Airflow** — оркестрация ETL процессов
+- ⚡ **Apache Kafka** — потоковая обработка данных
+- 🗂️ **Apache Zookeeper** — координация Kafka кластера
 - 🐳 **Docker / Rancher Desktop** — контейнеризация  
 - (опционально) 📊 **Grafana + Prometheus** — мониторинг  
 
@@ -51,25 +54,66 @@ docker compose up -d
 
 ---
 
-### 4. Доступ к сервисам
+### 4. Инициализация Airflow (первый запуск)
+```bash
+docker compose run --rm airflow-webserver bash -c "airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com"
+```
+
+Затем перезапустите сервисы:
+```bash
+docker compose up -d
+```
+
+---
+
+### 5. Доступ к сервисам
 
 - 🌐 **Airflow UI**: http://localhost:8081
-
-   Логин: admin
-
-   Пароль: admin
+  - Логин: admin
+  - Пароль: admin
 
 - 🐘 **PostgreSQL**:
+  - Хост: localhost
+  - Порт: 5432
+  - Пользователь: admin
+  - Пароль: admin
+  - База: etl_db 
 
-   Хост: localhost 
+- ⚡ **Apache Kafka**:
+  - Хост: localhost
+  - Порт: 9092
+  - Брокер: PLAINTEXT://localhost:9092
 
-   Порт: 5432 
+- 🗂️ **Apache Zookeeper**:
+  - Хост: localhost
+  - Порт: 2181
+---
 
-   Пользователь: admin 
+## 🧪 Тестирование Kafka
 
-   Пароль: admin 
+### Создание топика и отправка сообщений
+```bash
+# Зайти в контейнер Kafka
+docker exec -it kafka bash
 
-   База: etl_db 
+# Создать топик
+kafka-topics --create --topic test-topic --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1
+
+# Запустить консюмера (терминал 1)
+kafka-console-consumer --topic test-topic --bootstrap-server kafka:9092 --from-beginning
+
+# Запустить продюсера (терминал 2)
+kafka-console-producer --topic test-topic --bootstrap-server kafka:9092
+```
+
+### Проверка состояния
+```bash
+# Список топиков
+kafka-topics --list --bootstrap-server kafka:9092
+
+# Описание топика
+kafka-topics --describe --topic test-topic --bootstrap-server kafka:9092
+```
 
 ---
 
@@ -98,6 +142,40 @@ with DAG(
 
 ---
 
+## 🔧 Управление сервисами
+
+### Проверка состояния
+```bash
+docker compose ps
+```
+
+### Просмотр логов
+```bash
+# Airflow webserver
+docker logs airflow-webserver --tail 100
+
+# Airflow scheduler  
+docker logs airflow-scheduler --tail 100
+
+# Kafka
+docker logs kafka --tail 100
+
+# Zookeeper
+docker logs zookeeper --tail 100
+```
+
+### Остановка сервисов
+```bash
+docker compose down
+```
+
+### Полная очистка (включая данные)
+```bash
+docker compose down -v
+```
+
+---
+
 ### 👥 Команда
 - ФИО / Telegram / GitHub участников команды
 
@@ -105,9 +183,10 @@ with DAG(
 ## 📌 Дополнительно
 
 - DAG’и добавляются в папку dags/ (автоматически подхватываются Airflow).
+- Kafka топики создаются автоматически при первом использовании.
+- Все данные сохраняются в Docker volumes для персистентности.
 
-- Для создания администратора вручную:
-
+### Для создания администратора вручную:
 ```bash
 docker compose run --rm airflow-webserver 
     airflow users create 
