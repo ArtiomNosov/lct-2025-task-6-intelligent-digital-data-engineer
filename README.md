@@ -281,3 +281,233 @@ docker stats
 # Очистка неиспользуемых образов
 dock
 ```
+
+# 📊 Пример: Анализ данных в разных форматах в нашей системе
+
+## Описание примера
+Этот пример демонстрирует обработку реальных данных в трех форматах:
+- **CSV**: Музейные билеты (~4GB, 12 файлов)
+- **JSON**: Реестр индивидуальных предпринимателей (~8.3GB, 31 файл)  
+- **XML**: Кадастровые данные недвижимости (~11.8GB, 15 файлов)
+
+## Шаг 1: Подготовка данных
+```bash
+# Поместите ваши файлы данных в папку data analysis/
+mkdir -p "data analysis"
+# Скопируйте туда ваши CSV, JSON, XML файлы
+```
+
+## Шаг 2: Создание DAG для анализа
+Создайте файл `dags/multi_format_analysis.py`:
+
+```python
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator
+from airflow.providers.postgres.operators.postgres import PostgresOperator
+from datetime import datetime, timedelta
+import json
+
+default_args = {
+    'owner': 'data-engineer',
+    'depends_on_past': False,
+    'start_date': datetime(2025, 1, 1),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
+
+def create_analysis_script():
+    """Создание Spark скрипта для анализа данных"""
+    spark_code = '''
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+import json
+
+spark = SparkSession.builder \\
+    .appName("DataAnalysis") \\
+    .master("spark://spark-master:7077") \\
+    .getOrCreate()
+
+print("🔥 Запуск анализа данных...")
+
+# 1. Анализ CSV данных (Музейные билеты)
+csv_df = spark.read \\
+    .option("header", "true") \\
+    .option("inferSchema", "true") \\
+    .csv("/opt/airflow/dags/data_analysis/*.csv")
+
+# Валидация и очистка
+csv_cleaned = csv_df \\
+    .withColumn("price_valid", when(col("ticket_price") > 0, col("ticket_price")).otherwise(0)) \\
+    .withColumn("phone_valid", when(col("client_phone").rlike("^[78]\\d{10}$"), "ВЕРНЫЙ").otherwise("НЕВЕРНЫЙ")) \\
+    .withColumn("data_source", lit("museum_csv"))
+
+# Аналитика по музеям
+museum_stats = csv_cleaned.groupBy("museum_name") \\
+    .agg(
+        count("*").alias("total_tickets"),
+        sum("price_valid").alias("total_revenue"),
+        avg("price_valid").alias("avg_price")
+    )
+
+print(f"✅ CSV: {csv_cleaned.count()} записей обработано")
+
+# 2. Анализ JSON данных (Предприниматели)
+json_files = spark.sparkContext.wholeTextFiles("/opt/airflow/dags/data_analysis/*.json")
+json_rdd = json_files.flatMap(lambda x: json.loads(x[1]) if isinstance(json.loads(x[1]), list) else [json.loads(x[1])])
+json_df = spark.createDataFrame(json_rdd)
+
+# Аналитика по предпринимателям
+entrepreneur_stats = json_df.groupBy("inf_authority_reg_ind_entrep_name") \\
+    .agg(count("*").alias("total_registrations"))
+
+print(f"✅ JSON: {json_df.count()} записей обработано")
+
+# 3. Анализ XML данных (Кадастровые данные)
+xml_df = spark.read \\
+    .format("xml") \\
+    .option("rowTag", "item") \\
+    .load("/opt/airflow/dags/data_analysis/*.xml")
+
+# Аналитика по кадастровым данным
+cadastral_stats = xml_df.groupBy("type") \\
+    .agg(count("*").alias("total_objects"))
+
+print(f"✅ XML: {xml_df.count()} записей обработано")
+
+# Сохранение результатов в PostgreSQL
+museum_stats.write \\
+    .format("jdbc") \\
+    .option("url", "jdbc:postgresql://postgres:5432/etl_db") \\
+    .option("dbtable", "museum_analytics") \\
+    .option("user", "admin") \\
+    .option("password", "admin") \\
+    .option("driver", "org.postgresql.Driver") \\
+    .mode("overwrite") \\
+    .save()
+
+print("✅ Результаты сохранены в PostgreSQL!")
+spark.stop()
+'''
+    
+    with open('/tmp/data_analysis.py', 'w') as f:
+        f.write(spark_code)
+
+with DAG(
+    'multi_format_analysis',
+    default_args=default_args,
+    description='Анализ данных CSV, JSON, XML',
+    schedule_interval=None,
+    catchup=False,
+    tags=['analysis', 'csv', 'json', 'xml'],
+) as dag:
+
+    # Создание таблиц
+    create_tables = PostgresOperator(
+        task_id='create_tables',
+        postgres_conn_id='postgres_default',
+        sql="""
+        CREATE TABLE IF NOT EXISTS museum_analytics (
+            id SERIAL PRIMARY KEY,
+            museum_name VARCHAR(500),
+            total_tickets INTEGER,
+            total_revenue DECIMAL(15,2),
+            avg_price DECIMAL(10,2),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """,
+    )
+
+    # Копирование данных
+    copy_data = BashOperator(
+        task_id='copy_data',
+        bash_command="""
+        docker exec spark-master mkdir -p /opt/airflow/dags/data_analysis
+        docker cp "data analysis/" spark-master:/opt/airflow/dags/
+        echo "✅ Данные скопированы"
+        """,
+    )
+
+    # Создание скрипта
+    create_script = PythonOperator(
+        task_id='create_script',
+        python_callable=create_analysis_script,
+    )
+
+    # Запуск анализа
+    run_analysis = BashOperator(
+        task_id='run_analysis',
+        bash_command="""
+        docker exec spark-master /opt/spark/bin/spark-submit \\
+            --master spark://spark-master:7077 \\
+            --packages org.postgresql:postgresql:42.7.0,com.databricks:spark-xml_2.12:0.15.0 \\
+            --executor-memory 1g \\
+            /tmp/data_analysis.py
+        """,
+    )
+
+    # Просмотр результатов
+    view_results = BashOperator(
+        task_id='view_results',
+        bash_command="""
+        echo "📊 Результаты анализа:"
+        docker exec postgres psql -U admin -d etl_db -c "
+        SELECT * FROM museum_analytics LIMIT 10;
+        "
+        """,
+    )
+
+    create_tables >> copy_data >> create_script >> run_analysis >> view_results
+```
+
+## Шаг 3: Запуск анализа
+
+1. **Сохраните файл** `multi_format_analysis.py` в папку `dags/`
+2. **Поместите ваши данные** в папку `data analysis/`
+3. **В Airflow UI** (http://localhost:8081):
+   - Найдите DAG `multi_format_analysis`
+   - Включите его переключателем
+   - Нажмите **"Trigger DAG"** ▶️
+
+## Шаг 4: Просмотр результатов
+
+### В Airflow UI:
+- Следите за выполнением задач в Graph View
+- Кликните на задачу `view_results` для просмотра результатов
+
+### В PostgreSQL:
+```bash
+# Подключитесь к базе данных
+docker exec -it postgres psql -U admin -d etl_db
+
+# Посмотрите результаты анализа
+SELECT * FROM museum_analytics ORDER BY total_revenue DESC LIMIT 10;
+```
+
+## Что получите:
+
+✅ **Статистику по музеям** (количество билетов, выручка, средняя цена)  
+✅ **Анализ данных предпринимателей** (количество регистраций по органам)  
+✅ **Статистику кадастровых объектов** (количество по типам)  
+✅ **Валидацию качества данных** (проверка форматов, корректности)  
+✅ **Результаты в PostgreSQL** для дальнейшего анализа  
+
+## Настройка под ваши данные:
+
+1. **Замените пути к файлам** в коде на ваши
+2. **Адаптируйте поля** под структуру ваших данных
+3. **Настройте валидацию** под ваши требования
+4. **Добавьте дополнительные метрики** по необходимости
+
+## Архитектура обработки:
+
+- [CSV Files] ──┐
+- [JSON Files] ─┼─► [Spark Ingestion] ──► [Data Validator] ──► [Analytics]
+- [XML Files] ──┘ │
+▼
+- [PostgreSQL] ◄── [Results Aggregator] ◄── [Quality Checker]
+
+**Этот пример показывает полный цикл обработки данных: от загрузки до аналитики!** 🚀
